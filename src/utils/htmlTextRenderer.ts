@@ -265,6 +265,121 @@ export class HtmlTextRenderer {
     }
 
     /**
+     * Generate text-only sticker using HTML/CSS
+     */
+    static async generateTextOnlySticker(
+        text: string,
+        options: {
+            fontSize?: number;
+            fontFamily?: string;
+            fontWeight?: string;
+            color?: string;
+            backgroundColor?: string;
+            padding?: number;
+            maxWidth?: number;
+            maxHeight?: number;
+            textAlign?: 'left' | 'center' | 'right';
+            textShadow?: string;
+        } = {}
+    ): Promise<Buffer> {
+        const {
+            fontSize = 60,
+            fontFamily = 'Arial, sans-serif',
+            fontWeight = 'bold',
+            color = '#ffffff',
+            backgroundColor = 'transparent',
+            padding = 20,
+            maxWidth = 512,
+            maxHeight = 512,
+            textAlign = 'center',
+            textShadow = '2px 2px 4px rgba(0,0,0,0.8)'
+        } = options;
+
+        const browser = await this.initBrowser();
+        const page = await browser.newPage();
+
+        try {
+            // Set viewport size
+            await page.setViewport({ 
+                width: maxWidth, 
+                height: maxHeight,
+                deviceScaleFactor: 2
+            });
+
+            // Create HTML content for text-only sticker
+            const htmlContent = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <style>
+                        * {
+                            margin: 0;
+                            padding: 0;
+                            box-sizing: border-box;
+                        }
+                        
+                        body {
+                            width: ${maxWidth}px;
+                            height: ${maxHeight}px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            background: ${backgroundColor};
+                            overflow: hidden;
+                        }
+                        
+                        .text-container {
+                            padding: ${padding}px;
+                            text-align: ${textAlign};
+                            width: 100%;
+                            word-wrap: break-word;
+                            word-break: break-word;
+                        }
+                        
+                        .text {
+                            font-family: ${fontFamily};
+                            font-size: ${fontSize}px;
+                            font-weight: ${fontWeight};
+                            color: ${color};
+                            text-shadow: ${textShadow};
+                            line-height: 1.2;
+                            white-space: pre-wrap;
+                            max-width: 100%;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="text-container">
+                        <div class="text">${text}</div>
+                    </div>
+                </body>
+                </html>
+            `;
+
+            await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+
+            // Take screenshot with transparent background
+            const buffer = await page.screenshot({
+                type: 'webp',
+                omitBackground: true,
+                quality: 100,
+                optimizeForSpeed: false,
+                clip: { x: 0, y: 0, width: maxWidth, height: maxHeight }
+            });
+
+            console.log(`✅ HTML text-only sticker generated successfully (${buffer.length} bytes)`);
+            return Buffer.from(buffer);
+
+        } catch (error) {
+            console.error('❌ Error generating HTML text-only sticker:', error);
+            throw error;
+        } finally {
+            await page.close();
+        }
+    }
+
+    /**
      * Get predefined text styles for different purposes
      */
     static getTextStyles(): Record<string, HtmlTextOptions> {

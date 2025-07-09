@@ -246,6 +246,103 @@ export class EmojiTextRenderer {
     }
 
     /**
+     * Generate text-only sticker using FFmpeg
+     */
+    static async generateTextOnlySticker(
+        text: string, 
+        options: {
+            fontSize?: number;
+            fontColor?: string;
+            backgroundColor?: string;
+            padding?: number;
+            maxWidth?: number;
+            maxHeight?: number;
+        } = {}
+    ): Promise<Buffer> {
+        const {
+            fontSize = 60,
+            fontColor = '#ffffff',
+            backgroundColor = 'transparent',
+            padding = 20,
+            maxWidth = 512,
+            maxHeight = 512
+        } = options;
+
+        this.ensureTempDir();
+        
+        const outputPath = path.join(this.tempDir, `text_sticker_${Date.now()}.webp`);
+        const escapedText = this.escapeText(text);
+        
+        try {
+            // Calculate canvas size based on text length and font size
+            const estimatedWidth = Math.min(text.length * (fontSize * 0.6) + (padding * 2), maxWidth);
+            const estimatedHeight = Math.min(fontSize + (padding * 2), maxHeight);
+            
+            // Create text-only sticker with transparent background
+            const ffmpegCommand = [
+                'ffmpeg',
+                '-f', 'lavfi',
+                '-i', `color=${backgroundColor === 'transparent' ? 'black' : backgroundColor}:size=${estimatedWidth}x${estimatedHeight}:duration=1`,
+                '-vf', [
+                    // Add text overlay
+                    `drawtext=text='${escapedText}'`,
+                    `${this.getEmojiAwareFontConfig(text, fontSize)}`,
+                    `fontcolor=${fontColor}`,
+                    `x=(w-text_w)/2`,
+                    `y=(h-text_h)/2`,
+                    backgroundColor === 'transparent' ? 'colorkey=black:0.1:0.1' : ''
+                ].filter(Boolean).join(':'),
+                '-frames:v', '1',
+                '-c:v', 'libwebp',
+                '-lossless', '1',
+                '-q:v', '100',
+                '-preset', 'default',
+                '-loop', '0',
+                '-y',
+                outputPath
+            ];
+
+            console.log('🎨 Generating text-only sticker with command:', ffmpegCommand.join(' '));
+            
+            const { stderr } = await execAsync(ffmpegCommand.join(' '));
+            
+            if (stderr && !stderr.includes('frame=')) {
+                console.warn('FFmpeg stderr (might be normal):', stderr);
+            }
+
+            if (!fs.existsSync(outputPath)) {
+                throw new Error('Failed to generate text sticker');
+            }
+
+            const buffer = fs.readFileSync(outputPath);
+            
+            // Cleanup
+            try {
+                fs.unlinkSync(outputPath);
+            } catch (cleanupError) {
+                console.warn('Failed to cleanup temp file:', cleanupError);
+            }
+
+            console.log(`✅ Text-only sticker generated successfully (${buffer.length} bytes)`);
+            return buffer;
+
+        } catch (error) {
+            console.error('❌ Error generating text-only sticker:', error);
+            
+            // Cleanup on error
+            try {
+                if (fs.existsSync(outputPath)) {
+                    fs.unlinkSync(outputPath);
+                }
+            } catch (cleanupError) {
+                console.warn('Failed to cleanup temp file on error:', cleanupError);
+            }
+            
+            throw error;
+        }
+    }
+
+    /**
      * Check FFmpeg capabilities for text rendering
      */
     private static async checkFFmpegCapabilities(): Promise<{

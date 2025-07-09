@@ -22,6 +22,7 @@ export default async function(sock: WASocket, chatId: string): Promise<void> {
 🖼️ *Perintah Media:*
 > *.sticker* — Buat stiker dari gambar/video  
 > • .stext <text> - Add text to sticker
+> • .tgen <text> - Generate text sticker (font 60)
 
 🎭 *Perintah Seru:*
 > *.joke* — Lelucon acak  

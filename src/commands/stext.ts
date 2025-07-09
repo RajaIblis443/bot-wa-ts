@@ -6,7 +6,23 @@ import { TextCompositeRenderer } from "../utils/textCompositeRenderer";
 import { downloadMediaMessage } from "@whiskeysockets/baileys";
 
 /**
- * Sticker Text command - Convert image/video to sticker with text overlay
+ * Get style configuration for text rendering
+ */
+function getStyleConfig(textStyle: string) {
+    const styleMap = {
+        meme: { fontSize: 40, fontColor: '#ffffff', position: 'top' as const },
+        title: { fontSize: 48, fontColor: '#ffffff', position: 'top' as const },
+        caption: { fontSize: 32, fontColor: '#ffffff', position: 'center' as const },
+        watermark: { fontSize: 24, fontColor: 'rgba(255,255,255,0.7)', position: 'bottom' as const },
+        comic: { fontSize: 36, fontColor: '#ffffff', position: 'center' as const },
+        neon: { fontSize: 42, fontColor: '#00ff00', position: 'center' as const }
+    };
+    
+    return styleMap[textStyle as keyof typeof styleMap] || styleMap['meme'];
+}
+
+/**
+ * Sticker Text command - Convert image/video to sticker with text overlay (with emoji support)
  * Usage: .stext <text> (reply to image/video)
  */
 export default async function(sock: WASocket, chatId: string, _senderId: string, args: string[], messageParam?: proto.IWebMessageInfo): Promise<void> {
@@ -25,21 +41,27 @@ export default async function(sock: WASocket, chatId: string, _senderId: string,
         if (!textOverlay) {
             const styles = Object.keys(HtmlTextRenderer.getTextStyles()).join(', ');
             await MessageUtils.sendMessage(sock, chatId, 
-                `❌ *Sticker Text dengan HTML/CSS*
+                `❌ *Sticker Text dengan HTML/CSS & Emoji Support*
                 
 📸 *Cara Penggunaan:*
 • Reply foto/video dengan .stext [style] <text>
 • Contoh: .stext meme Hello World
 • Contoh: .stext neon EPIC TEXT
+• Contoh: .stext comic Fun Text! 😀
 
 🎨 *Style Tersedia:*
 • ${styles}
 
-💡 *Contoh Lengkap:*
+� *Dukungan Emoji:*
+• Emoji otomatis terdeteksi & diproses dengan FFmpeg
+• Text tanpa emoji menggunakan HTML/CSS berkualitas tinggi
+• Semua emoji Unicode didukung
+
+�💡 *Contoh Lengkap:*
 • .stext meme TOP TEXT
-• .stext title Beautiful Title
-• .stext comic Fun Text! �
-• .stext neon GLOWING TEXT
+• .stext title Beautiful Title 🌟
+• .stext comic Fun Text! 😂🎉
+• .stext neon GLOWING TEXT ⚡
 • .stext watermark © 2024`
 );
             return;
@@ -86,6 +108,12 @@ export default async function(sock: WASocket, chatId: string, _senderId: string,
         let textStyle = 'meme';
         let actualText = textOverlay;
         
+        // Check if text contains emoji for special handling
+        const hasEmoji = EmojiTextRenderer.hasEmojiEnhanced(actualText);
+        
+        console.log(`🔍 Text analysis: "${actualText}"`);
+        console.log(`😀 Contains emoji: ${hasEmoji}`);
+        
         // Check if first argument is a predefined style
         const textArgs = textOverlay.split(' ');
         const firstArg = textArgs[0]?.toLowerCase();
@@ -119,6 +147,7 @@ Gunakan: .stext ${textStyle} <text anda>`);
 📝 Text: "${actualText}"
 🎨 Style: ${textStyle}
 🖼️ Media: ${mediaType}
+${hasEmoji ? '😀 Emoji: Terdeteksi' : ''}
 ⚡ Method: ${capabilities.html ? 'HTML/CSS (Primary)' : 'FFmpeg Only'} → FFmpeg fallback`);
 
         // Download media
@@ -135,9 +164,23 @@ Gunakan: .stext ${textStyle} <text anda>`);
         if (capabilities.html || capabilities.ffmpeg) {
             try {
                 if (mediaType === 'image') {
-                    // Prioritize HTML/CSS rendering for better quality and transparency
-                    if (capabilities.html) {
+                    // Smart rendering strategy: prioritize method based on content
+                    if (hasEmoji || capabilities.html === false) {
+                        // Use FFmpeg for emoji support or when HTML not available
+                        console.log('🎨 Using FFmpeg method (emoji support or HTML unavailable)');
+                        const config = getStyleConfig(textStyle);
+                        stickerBuffer = await EmojiTextRenderer.processImageWithText(buffer, actualText, {
+                            fontSize: config.fontSize,
+                            fontColor: config.fontColor,
+                            position: config.position
+                        });
+                        
+                        await MessageUtils.sendMessage(sock, chatId, hasEmoji ? '✅ FFmpeg emoji rendering berhasil!' : '✅ FFmpeg rendering berhasil!');
+                        
+                    } else {
+                        // Use HTML/CSS for better quality pure text
                         try {
+                            console.log('🎨 Using HTML/CSS method (high quality text)');
                             stickerBuffer = await TextCompositeRenderer.compositeHtmlTextOverImage(
                                 buffer, 
                                 actualText, 
@@ -148,34 +191,16 @@ Gunakan: .stext ${textStyle} <text anda>`);
                         } catch (htmlError) {
                             console.log('HTML rendering failed, trying FFmpeg fallback:', htmlError);
                             
-                            // Fallback to FFmpeg method
-                            const styleMap = {
-                                meme: { fontSize: 40, fontColor: '#ffffff', position: 'top' as const },
-                                title: { fontSize: 48, fontColor: '#ffffff', position: 'top' as const },
-                                caption: { fontSize: 32, fontColor: '#ffffff', position: 'center' as const },
-                                watermark: { fontSize: 24, fontColor: 'rgba(255,255,255,0.7)', position: 'bottom' as const },
-                                comic: { fontSize: 36, fontColor: '#ffffff', position: 'center' as const },
-                                neon: { fontSize: 42, fontColor: '#00ff00', position: 'center' as const }
-                            };
-                            
-                            const config = styleMap[textStyle as keyof typeof styleMap] || styleMap['meme'];
+                            // Fallback to FFmpeg method with emoji support
+                            const config = getStyleConfig(textStyle);
                             stickerBuffer = await EmojiTextRenderer.processImageWithText(buffer, actualText, {
                                 fontSize: config.fontSize,
                                 fontColor: config.fontColor,
                                 position: config.position
                             });
                             
-                            await MessageUtils.sendMessage(sock, chatId, '✅ FFmpeg fallback berhasil!');
+                            await MessageUtils.sendMessage(sock, chatId, '✅ FFmpeg emoji fallback berhasil!');
                         }
-                    } else {
-                        // Only FFmpeg available
-                        stickerBuffer = await TextCompositeRenderer.compositeHtmlTextOverImage(
-                            buffer, 
-                            actualText, 
-                            { style: textStyle, method: 'ffmpeg' }
-                        );
-                        
-                        await MessageUtils.sendMessage(sock, chatId, '✅ FFmpeg composite berhasil!');
                     }
                 } else {
                     // For video, HTML rendering is not practical, use FFmpeg processing

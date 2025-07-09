@@ -20,6 +20,7 @@ export default async function(sock: WASocket, chatId: string): Promise<void> {
 🖼️ *Perintah Media:*
 • .sticker - Membuat sticker dari gambar atau video
 • .stext <text> - Add text to sticker
+• .tgen <text> - Generate sticker from text only (font 60)
 
 🎭 *Perintah Seru:*
 • .joke - Lelucon acak
@@ -42,6 +43,7 @@ export default async function(sock: WASocket, chatId: string): Promise<void> {
 🤖 Ketik salah satu perintah untuk mulai!
 💡 Untuk .sticker: reply foto/video dengan .sticker
 💡 Untuk .stext: reply foto/video dengan .stext <text>
+💡 Untuk .tgen: langsung ketik .tgen <text anda>
 `;
 
     await MessageUtils.sendMessage(sock, chatId, menuText);
