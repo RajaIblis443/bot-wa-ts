@@ -1,0 +1,10 @@
+{
+  "ignore": [
+    "session/**/*",
+    "temp/**/*",
+    "*.log",
+    "node_modules/**/*"
+  ],
+  "ext": "ts",
+  "exec": "ts-node index.ts"
+}
