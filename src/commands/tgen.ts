@@ -60,39 +60,75 @@ ${hasEmoji ? '😀 Emoji: Terdeteksi' : '📝 Text: Pure text'}
         try {
             if (hasEmoji) {
                 // Use FFmpeg for emoji support
-                stickerBuffer = await EmojiTextRenderer.generateTextOnlySticker(textContent, {
-                    fontSize: 60,
-                    fontColor: '#ffffff',
-                    backgroundColor: 'transparent',
-                    padding: 20,
-                    maxWidth: 512,
-                    maxHeight: 512
-                });
-                
-                await MessageUtils.sendMessage(sock, chatId, '✅ FFmpeg emoji text sticker berhasil dibuat!');
+                try {
+                    stickerBuffer = await EmojiTextRenderer.generateTextOnlySticker(textContent, {
+                        fontSize: 60,
+                        fontColor: '#ffffff',
+                        backgroundColor: 'transparent',
+                        padding: 20,
+                        maxWidth: 512,
+                        maxHeight: 512
+                    });
+                    
+                    await MessageUtils.sendMessage(sock, chatId, '✅ FFmpeg emoji text sticker berhasil dibuat!');
+                } catch (ffmpegError) {
+                    console.warn('FFmpeg emoji rendering failed, trying HTML fallback:', ffmpegError);
+                    
+                    // Fallback to HTML/CSS even for emoji text
+                    stickerBuffer = await HtmlTextRenderer.generateTextOnlySticker(textContent, {
+                        fontSize: 60,
+                        fontFamily: 'Arial, "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif',
+                        fontWeight: 'bold',
+                        color: '#ffffff',
+                        backgroundColor: 'transparent',
+                        padding: 20,
+                        maxWidth: 512,
+                        maxHeight: 512,
+                        textAlign: 'center',
+                        textShadow: '2px 2px 4px rgba(0,0,0,0.8)'
+                    });
+                    
+                    await MessageUtils.sendMessage(sock, chatId, '✅ HTML/CSS emoji fallback text sticker berhasil dibuat!');
+                }
                 
             } else {
                 // Use HTML/CSS for better quality pure text
-                stickerBuffer = await HtmlTextRenderer.generateTextOnlySticker(textContent, {
-                    fontSize: 60,
-                    fontFamily: 'Arial, sans-serif',
-                    fontWeight: 'bold',
-                    color: '#ffffff',
-                    backgroundColor: 'transparent',
-                    padding: 20,
-                    maxWidth: 512,
-                    maxHeight: 512,
-                    textAlign: 'center',
-                    textShadow: '2px 2px 4px rgba(0,0,0,0.8)'
-                });
-                
-                await MessageUtils.sendMessage(sock, chatId, '✅ HTML/CSS text sticker berhasil dibuat!');
+                try {
+                    stickerBuffer = await HtmlTextRenderer.generateTextOnlySticker(textContent, {
+                        fontSize: 60,
+                        fontFamily: 'Arial, sans-serif',
+                        fontWeight: 'bold',
+                        color: '#ffffff',
+                        backgroundColor: 'transparent',
+                        padding: 20,
+                        maxWidth: 512,
+                        maxHeight: 512,
+                        textAlign: 'center',
+                        textShadow: '2px 2px 4px rgba(0,0,0,0.8)'
+                    });
+                    
+                    await MessageUtils.sendMessage(sock, chatId, '✅ HTML/CSS text sticker berhasil dibuat!');
+                } catch (htmlError) {
+                    console.warn('HTML rendering failed, trying FFmpeg fallback:', htmlError);
+                    
+                    // Fallback to FFmpeg
+                    stickerBuffer = await EmojiTextRenderer.generateTextOnlySticker(textContent, {
+                        fontSize: 60,
+                        fontColor: '#ffffff',
+                        backgroundColor: 'transparent', 
+                        padding: 20,
+                        maxWidth: 512,
+                        maxHeight: 512
+                    });
+                    
+                    await MessageUtils.sendMessage(sock, chatId, '✅ FFmpeg fallback text sticker berhasil dibuat!');
+                }
             }
             
         } catch (renderError) {
             console.error('Primary rendering failed, using FFmpeg fallback:', renderError);
             
-            // Fallback to FFmpeg method
+            // Final fallback to FFmpeg method
             stickerBuffer = await EmojiTextRenderer.generateTextOnlySticker(textContent, {
                 fontSize: 60,
                 fontColor: '#ffffff',
@@ -102,7 +138,7 @@ ${hasEmoji ? '😀 Emoji: Terdeteksi' : '📝 Text: Pure text'}
                 maxHeight: 512
             });
             
-            await MessageUtils.sendMessage(sock, chatId, '✅ FFmpeg fallback text sticker berhasil dibuat!');
+            await MessageUtils.sendMessage(sock, chatId, '✅ FFmpeg final fallback text sticker berhasil dibuat!');
         }
 
         // Send sticker

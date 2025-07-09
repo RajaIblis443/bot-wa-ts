@@ -278,33 +278,36 @@ export class EmojiTextRenderer {
             const estimatedWidth = Math.min(text.length * (fontSize * 0.6) + (padding * 2), maxWidth);
             const estimatedHeight = Math.min(fontSize + (padding * 2), maxHeight);
             
-            // Create text-only sticker with transparent background
-            const ffmpegCommand = [
-                'ffmpeg',
+            // Build drawtext filter properly
+            const fontConfig = this.getEmojiAwareFontConfig(text, fontSize);
+            
+            // Create proper filter string for FFmpeg
+            const drawTextFilter = `drawtext=text='${escapedText}':${fontConfig}:fontcolor=${fontColor}:x=(w-text_w)/2:y=(h-text_h)/2`;
+            
+            // Build complete filter chain
+            let filterChain = drawTextFilter;
+            if (backgroundColor === 'transparent') {
+                filterChain += ',colorkey=black:0.1:0.1';
+            }
+            
+            // Create FFmpeg command with proper escaping
+            const ffmpegArgs = [
                 '-f', 'lavfi',
                 '-i', `color=${backgroundColor === 'transparent' ? 'black' : backgroundColor}:size=${estimatedWidth}x${estimatedHeight}:duration=1`,
-                '-vf', [
-                    // Add text overlay
-                    `drawtext=text='${escapedText}'`,
-                    `${this.getEmojiAwareFontConfig(text, fontSize)}`,
-                    `fontcolor=${fontColor}`,
-                    `x=(w-text_w)/2`,
-                    `y=(h-text_h)/2`,
-                    backgroundColor === 'transparent' ? 'colorkey=black:0.1:0.1' : ''
-                ].filter(Boolean).join(':'),
+                '-vf', filterChain,
                 '-frames:v', '1',
                 '-c:v', 'libwebp',
                 '-lossless', '1',
                 '-q:v', '100',
                 '-preset', 'default',
                 '-loop', '0',
-                '-y',
-                outputPath
+                '-y', `"${outputPath}"`
             ];
 
-            console.log('🎨 Generating text-only sticker with command:', ffmpegCommand.join(' '));
+            const fullCommand = `ffmpeg ${ffmpegArgs.join(' ')}`;
+            console.log('🎨 Generating text-only sticker with command:', fullCommand);
             
-            const { stderr } = await execAsync(ffmpegCommand.join(' '));
+            const { stderr } = await execAsync(fullCommand);
             
             if (stderr && !stderr.includes('frame=')) {
                 console.warn('FFmpeg stderr (might be normal):', stderr);
@@ -341,6 +344,10 @@ export class EmojiTextRenderer {
             throw error;
         }
     }
+
+    /**
+     * Check FFmpeg capabilities for text rendering
+     */
 
     /**
      * Check FFmpeg capabilities for text rendering
@@ -471,23 +478,28 @@ export class EmojiTextRenderer {
     }
 
     /**
-     * Get emoji-aware font configuration
+     * Get emoji-aware font configuration with proper Windows path escaping
      */
     static getEmojiAwareFontConfig(text: string, fontSize: number = 28): string {
         const hasEmojiInText = this.hasEmojiEnhanced(text);
         const fontExists = this.checkEmojiFont();
 
         if (hasEmojiInText && fontExists) {
-            // Use emoji font for texts with emoji
-            return `fontfile='${this.fontPath}':fontsize=${fontSize}`;
+            // Use emoji font for texts with emoji - escape Windows paths properly
+            let fontPath = this.fontPath;
+            if (process.platform === 'win32') {
+                // For Windows, convert backslashes to forward slashes and escape properly
+                fontPath = fontPath.replace(/\\/g, '/');
+            }
+            return `fontfile='${fontPath}':fontsize=${fontSize}`;
         } else if (process.platform === 'darwin') {
             // macOS system fonts with emoji support
             return `fontfile='/System/Library/Fonts/Arial.ttf':fontsize=${fontSize}`;
         } else if (process.platform === 'win32') {
-            // Windows system fonts
-            return `fontfile='C\\:/Windows/Fonts/arial.ttf':fontsize=${fontSize}`;
+            // Windows system fonts - use forward slashes
+            return `fontfile='C:/Windows/Fonts/arial.ttf':fontsize=${fontSize}`;
         } else {
-            // Linux/Unix - use built-in font
+            // Linux/Unix - use built-in font (no fontfile needed)
             return `fontsize=${fontSize}`;
         }
     }
