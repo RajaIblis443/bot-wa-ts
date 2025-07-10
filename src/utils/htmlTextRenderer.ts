@@ -3,6 +3,7 @@ import { promisify } from 'util';
 import { exec } from 'child_process';
 import path from 'path';
 import fs from 'fs/promises';
+import { getWebpOutputArgs, getTempWebpPath, getStandardScaleFilter } from "./ffmpegUtils";
 
 export interface HtmlTextOptions {
     fontSize?: number;
@@ -1297,7 +1298,7 @@ export class HtmlTextRenderer {
         
         const videoInput = path.join(tempDir, `video_input_${Date.now()}.mp4`);
         const textOverlay = path.join(tempDir, `text_overlay_${Date.now()}.png`);
-        const videoOutput = path.join(tempDir, `video_output_${Date.now()}.webp`);
+        const videoOutput = getTempWebpPath(tempDir, 'video_output');
 
         try {
             // Save input video
@@ -1355,7 +1356,14 @@ export class HtmlTextRenderer {
             console.log('🎬 Processing video with HTML text overlay');
             
             // Build the FFmpeg command for combining video with HTML text overlay
-            const ffmpegCommand = `ffmpeg -i "${videoInput}" -i "${textOverlay}" -filter_complex "[0:v]fps=${fps},scale=512:512:force_original_aspect_ratio=decrease,setsar=1[bg];[1:v]format=rgba[overlay];[bg][overlay]overlay=${hPosition}:${vPosition}:format=auto" -t ${maxDuration} -f webp -y "${videoOutput}"`;
+            // Using mobile-optimized WebP parameters
+            const ffmpegCommand = `ffmpeg -i "${videoInput}" -i "${textOverlay}" -filter_complex "[0:v]fps=${fps},${getStandardScaleFilter()},setsar=1[bg];[1:v]format=rgba[overlay];[bg][overlay]overlay=${hPosition}:${vPosition}:format=auto" -t ${maxDuration} ${getWebpOutputArgs({
+                fps,
+                lossless: false, 
+                quality: 80,
+                loop: 0,
+                maxDuration
+            })} -y "${videoOutput}"`;
             
             console.log('🔧 FFmpeg command:', ffmpegCommand);
             await execAsync(ffmpegCommand);
@@ -1428,7 +1436,7 @@ export class HtmlTextRenderer {
         await fs.mkdir(tempDir, { recursive: true }).catch(() => {});
         
         const videoInput = path.join(tempDir, `video_input_${Date.now()}.mp4`);
-        const videoOutput = path.join(tempDir, `video_output_${Date.now()}.webp`);
+        const videoOutput = getTempWebpPath(tempDir, 'video_output_fallback');
         
         try {
             // Save input video
@@ -1445,9 +1453,15 @@ export class HtmlTextRenderer {
                 case 'bottom': default: textPos = 'x=(w-text_w)/2:y=h*0.9'; break;
             }
             
-            // Build the FFmpeg command for direct text rendering
+            // Build the FFmpeg command for direct text rendering with mobile-optimized WebP parameters
             const execAsync = promisify(exec);
-            const ffmpegCommand = `ffmpeg -i "${videoInput}" -vf "fps=${fps},scale=512:512:force_original_aspect_ratio=decrease,drawtext=text='${escapedText}':fontsize=${fontSize}:fontcolor=${color}:${textPos}:box=1:boxcolor=${backgroundColor}@${backgroundOpacity}:boxborderw=5" -t ${maxDuration} -f webp -y "${videoOutput}"`;
+            const ffmpegCommand = `ffmpeg -i "${videoInput}" -vf "fps=${fps},${getStandardScaleFilter()},drawtext=text='${escapedText}':fontsize=${fontSize}:fontcolor=${color}:${textPos}:box=1:boxcolor=${backgroundColor}@${backgroundOpacity}:boxborderw=5" -t ${maxDuration} ${getWebpOutputArgs({
+                fps,
+                lossless: false,
+                quality: 80,
+                loop: 0,
+                maxDuration
+            })} -y "${videoOutput}"`;
             
             console.log('🔧 FFmpeg fallback command:', ffmpegCommand);
             await execAsync(ffmpegCommand);

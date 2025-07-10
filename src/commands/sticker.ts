@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { getWebpOutputArgs, getTempWebpPath, getStandardScaleFilter } from "../utils/ffmpegUtils";
 
 const execAsync = promisify(exec);
 
@@ -169,11 +170,17 @@ async function processVideoSticker(sock: WASocket, chatId: string, buffer: Buffe
             console.log('⚠️ Could not get video duration, proceeding with conversion...');
         }
 
-        // Convert video to animated WebP sticker
+        // Convert video to animated WebP sticker with parameters optimized for WhatsApp mobile
         // NO PADDING, NO BACKGROUND, maintain aspect ratio
         // Scale to fit within 512x512 but don't stretch or add background
-        const ffmpegCommand = `ffmpeg -i "${inputFile}" -t 10 -vf "fps=15,scale=512:512:force_original_aspect_ratio=decrease" -f webp -y "${outputFile}"`;
+        const ffmpegCommand = `ffmpeg -i "${inputFile}" -t 10 -vf "fps=12,${getStandardScaleFilter()}" ${getWebpOutputArgs({
+            fps: 12,
+            lossless: false, 
+            quality: 80,
+            loop: 0
+        })} -y "${outputFile}"`;
         
+        console.log('🔧 Mobile-optimized FFmpeg command:', ffmpegCommand);
         await execAsync(ffmpegCommand);
 
         // Read converted file

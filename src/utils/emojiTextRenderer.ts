@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { getWebpOutputArgs, getTempWebpPath, getStandardScaleFilter } from "./ffmpegUtils";
 
 const execAsync = promisify(exec);
 
@@ -216,7 +217,7 @@ export class EmojiTextRenderer {
         } = options;
 
         const inputFile = path.join(this.tempDir, `emoji_video_input_${Date.now()}.mp4`);
-        const outputFile = path.join(this.tempDir, `emoji_video_output_${Date.now()}.webp`);
+        const outputFile = getTempWebpPath(this.tempDir, `emoji_video_output`);
 
         try {
             // Write input file
@@ -225,8 +226,14 @@ export class EmojiTextRenderer {
             // Generate text overlay filter
             const textOverlayFilter = this.generateTextOverlay(text, textOptions);
 
-            // Build FFmpeg command for video
-            const ffmpegCommand = `ffmpeg -i "${inputFile}" -t ${maxDuration} -vf "fps=${fps},scale=512:512:force_original_aspect_ratio=decrease,${textOverlayFilter}" -f webp -y "${outputFile}"`;
+            // Build FFmpeg command for video with mobile-optimized WebP parameters
+            const ffmpegCommand = `ffmpeg -i "${inputFile}" -t ${maxDuration} -vf "fps=${fps},${getStandardScaleFilter()},${textOverlayFilter}" ${getWebpOutputArgs({
+                fps,
+                lossless: false,
+                quality: 80,
+                loop: 0,
+                maxDuration
+            })} -y "${outputFile}"`;
 
             console.log('🎬 Processing video with emoji text:', text);
             console.log('🔧 FFmpeg command:', ffmpegCommand);
@@ -276,7 +283,7 @@ export class EmojiTextRenderer {
 
         this.ensureTempDir();
         
-        const outputPath = path.join(this.tempDir, `text_sticker_${Date.now()}.webp`);
+        const outputPath = getTempWebpPath(this.tempDir, 'text_sticker');
         const escapedText = this.escapeText(text);
         
         try {
@@ -300,7 +307,11 @@ export class EmojiTextRenderer {
             filterChain += '"';
             
             // Use direct command string format for better control of quoting
-            const ffmpegCmd = `ffmpeg -f lavfi -i color=${backgroundColor === 'transparent' ? 'black' : backgroundColor}:size=${estimatedWidth}x${estimatedHeight}:duration=1 -vf ${filterChain} -frames:v 1 -c:v libwebp -lossless 1 -q:v 100 -preset default -loop 0 -y "${outputPath}"`;
+            const ffmpegCmd = `ffmpeg -f lavfi -i color=${backgroundColor === 'transparent' ? 'black' : backgroundColor}:size=${estimatedWidth}x${estimatedHeight}:duration=1 -vf ${filterChain} -frames:v 1 ${getWebpOutputArgs({
+                lossless: true,
+                quality: 100,
+                loop: 0
+            })} -y "${outputPath}"`;
             
             console.log('🎨 Generating text-only sticker with command:', ffmpegCmd);
             

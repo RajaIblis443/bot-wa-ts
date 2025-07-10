@@ -165,7 +165,7 @@ ${hasEmoji ? '😀 Emoji: Terdeteksi' : ''}
             try {
                 if (mediaType === 'image') {
                     // Smart rendering strategy: prioritize method based on content
-                    if (hasEmoji || capabilities.html === false) {
+                    if (hasEmoji || !capabilities.html.available) {
                         // Use FFmpeg for emoji support or when HTML not available
                         console.log('🎨 Using FFmpeg method (emoji support or HTML unavailable)');
                         const config = getStyleConfig(textStyle);

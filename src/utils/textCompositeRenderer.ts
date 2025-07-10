@@ -3,6 +3,7 @@ import { promisify } from 'util';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { HtmlTextRenderer } from './htmlTextRenderer';
+import { getWebpOutputArgs, getTempWebpPath, getStandardScaleFilter } from "./ffmpegUtils";
 
 const execAsync = promisify(exec);
 
@@ -42,7 +43,7 @@ export class TextCompositeRenderer {
 
         const inputFile = path.join(this.tempDir, `bg_input_${Date.now()}.jpg`);
         const overlayFile = path.join(this.tempDir, `text_overlay_${Date.now()}.png`);
-        const outputFile = path.join(this.tempDir, `composite_output_${Date.now()}.webp`);
+        const outputFile = getTempWebpPath(this.tempDir, 'composite_output');
 
         try {
             // Write background image
@@ -76,7 +77,11 @@ export class TextCompositeRenderer {
                 await fs.writeFile(overlayFile, textOverlayBuffer);
 
                 // Composite using FFmpeg - ensure overlay has transparent background
-                const ffmpegCommand = `ffmpeg -i "${inputFile}" -i "${overlayFile}" -filter_complex "[0:v]scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black[bg];[1:v]format=rgba[overlay];[bg][overlay]overlay=0:0:format=auto" -f webp -y "${outputFile}"`;
+                const ffmpegCommand = `ffmpeg -i "${inputFile}" -i "${overlayFile}" -filter_complex "[0:v]${getStandardScaleFilter()},pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black[bg];[1:v]format=rgba[overlay];[bg][overlay]overlay=0:0:format=auto" ${getWebpOutputArgs({
+                    lossless: false,
+                    quality: 85,
+                    loop: 0
+                })} -y "${outputFile}"`;
 
                 console.log('🎨 Compositing HTML text overlay:', text);
                 console.log('🔧 FFmpeg command:', ffmpegCommand);
@@ -86,7 +91,11 @@ export class TextCompositeRenderer {
             } else {
                 // Use pure FFmpeg text rendering
                 const textOverlayFilter = this.generateFFmpegTextOverlay(text, options);
-                const ffmpegCommand = `ffmpeg -i "${inputFile}" -vf "scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black,${textOverlayFilter}" -f webp -y "${outputFile}"`;
+                const ffmpegCommand = `ffmpeg -i "${inputFile}" -vf "${getStandardScaleFilter()},pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black,${textOverlayFilter}" ${getWebpOutputArgs({
+                    lossless: false,
+                    quality: 85,
+                    loop: 0
+                })} -y "${outputFile}"`;
 
                 console.log('🎨 Processing with FFmpeg text:', text);
                 console.log('🔧 FFmpeg command:', ffmpegCommand);
@@ -256,7 +265,14 @@ export class TextCompositeRenderer {
      */
     static async checkAvailability(): Promise<{
         ffmpeg: boolean;
-        html: boolean;
+        html: {
+            available: boolean;
+            puppeteer: boolean;
+            highQuality: boolean;
+            emojiSupport: boolean;
+            animationSupport: boolean;
+            gradientSupport: boolean;
+        };
     }> {
         try {
             const ffmpegCheck = execAsync('ffmpeg -version').then(() => true).catch(() => false);
@@ -266,7 +282,17 @@ export class TextCompositeRenderer {
 
             return { ffmpeg, html };
         } catch {
-            return { ffmpeg: false, html: false };
+            return { 
+                ffmpeg: false, 
+                html: {
+                    available: false,
+                    puppeteer: false,
+                    highQuality: false,
+                    emojiSupport: false,
+                    animationSupport: false,
+                    gradientSupport: false
+                }
+            };
         }
     }
 }
