@@ -36,14 +36,20 @@ export class EmojiTextRenderer {
     /**
      * Escape text for FFmpeg usage
      */
+    /**
+     * Escape text for FFmpeg usage with improved emoji handling
+     * The key is to ensure all special characters are escaped properly
+     */
     private static escapeText(text: string): string {
         return text
+            .replace(/\\/g, '\\\\')  // Must escape backslashes first
             .replace(/'/g, "\\'")
             .replace(/"/g, '\\"')
-            .replace(/\\/g, '\\\\')
             .replace(/:/g, '\\:')
             .replace(/\[/g, '\\[')
-            .replace(/\]/g, '\\]');
+            .replace(/\]/g, '\\]')
+            .replace(/=/g, '\\=')
+            .replace(/,/g, '\\,');
     }
 
     /**
@@ -281,33 +287,24 @@ export class EmojiTextRenderer {
             // Build drawtext filter properly
             const fontConfig = this.getEmojiAwareFontConfig(text, fontSize);
             
-            // Create proper filter string for FFmpeg
-            const drawTextFilter = `drawtext=text='${escapedText}':${fontConfig}:fontcolor=${fontColor}:x=(w-text_w)/2:y=(h-text_h)/2`;
+            // Create filter string with better emoji handling by using double quotes around the filter
+            // Note: We put the whole filter in double quotes and escape single quotes inside
+            let filterChain = `"drawtext=text='${escapedText}':${fontConfig}:fontcolor=${fontColor}:x=(w-text_w)/2:y=(h-text_h)/2`;
             
-            // Build complete filter chain
-            let filterChain = drawTextFilter;
+            // Add colorkey for transparency if needed
             if (backgroundColor === 'transparent') {
                 filterChain += ',colorkey=black:0.1:0.1';
             }
             
-            // Create FFmpeg command with proper escaping
-            const ffmpegArgs = [
-                '-f', 'lavfi',
-                '-i', `color=${backgroundColor === 'transparent' ? 'black' : backgroundColor}:size=${estimatedWidth}x${estimatedHeight}:duration=1`,
-                '-vf', filterChain,
-                '-frames:v', '1',
-                '-c:v', 'libwebp',
-                '-lossless', '1',
-                '-q:v', '100',
-                '-preset', 'default',
-                '-loop', '0',
-                '-y', `"${outputPath}"`
-            ];
-
-            const fullCommand = `ffmpeg ${ffmpegArgs.join(' ')}`;
-            console.log('🎨 Generating text-only sticker with command:', fullCommand);
+            // Close the double quotes
+            filterChain += '"';
             
-            const { stderr } = await execAsync(fullCommand);
+            // Use direct command string format for better control of quoting
+            const ffmpegCmd = `ffmpeg -f lavfi -i color=${backgroundColor === 'transparent' ? 'black' : backgroundColor}:size=${estimatedWidth}x${estimatedHeight}:duration=1 -vf ${filterChain} -frames:v 1 -c:v libwebp -lossless 1 -q:v 100 -preset default -loop 0 -y "${outputPath}"`;
+            
+            console.log('🎨 Generating text-only sticker with command:', ffmpegCmd);
+            
+            const { stderr } = await execAsync(ffmpegCmd);
             
             if (stderr && !stderr.includes('frame=')) {
                 console.warn('FFmpeg stderr (might be normal):', stderr);

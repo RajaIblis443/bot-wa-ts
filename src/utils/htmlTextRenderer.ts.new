@@ -1,8 +1,4 @@
 import puppeteer, { Browser } from 'puppeteer';
-import { promisify } from 'util';
-import { exec } from 'child_process';
-import path from 'path';
-import fs from 'fs/promises';
 
 export interface HtmlTextOptions {
     fontSize?: number;
@@ -443,7 +439,11 @@ export class HtmlTextRenderer {
             console.log('🔄 Falling back to FFmpeg for text generation...');
             
             try {
-                // Use the modules imported at the top of the file
+                // Import modules needed for FFmpeg fallback
+                const { promisify } = require('util');
+                const { exec } = require('child_process');
+                const path = require('path');
+                const fs = require('fs').promises;
                 const execAsync = promisify(exec);
                 
                 // Create temporary directory for FFmpeg output
