@@ -203,42 +203,75 @@ ${hasEmoji ? '😀 Emoji: Terdeteksi' : ''}
                         }
                     }
                 } else {
-                    // For video, HTML rendering is not practical, use FFmpeg processing
-                    const styleMap = {
-                        meme: { fontSize: 40, fontColor: '#ffffff', position: 'top' as const },
-                        title: { fontSize: 48, fontColor: '#ffffff', position: 'top' as const },
-                        caption: { fontSize: 32, fontColor: '#ffffff', position: 'center' as const },
-                        watermark: { fontSize: 24, fontColor: 'rgba(255,255,255,0.7)', position: 'bottom' as const },
-                        comic: { fontSize: 36, fontColor: '#ffffff', position: 'center' as const },
-                        neon: { fontSize: 42, fontColor: '#00ff00', position: 'center' as const }
-                    };
-                    
-                    const config = styleMap[textStyle as keyof typeof styleMap] || styleMap['meme'];
-                    
-                    // Use TextCompositeRenderer for video as well to maintain consistency
+                    // For video, use our enhanced HTML/CSS video processor
                     try {
-                        stickerBuffer = await TextCompositeRenderer.compositeHtmlTextOverImage(
+                        console.log('🎨 Using enhanced HTML/CSS video processing');
+                        
+                        // Use the new HTML/CSS video processor with proper style support
+                        stickerBuffer = await HtmlTextRenderer.processVideoWithHtmlText(
                             buffer, 
                             actualText, 
                             { 
-                                style: textStyle, 
-                                method: 'ffmpeg', // Force FFmpeg for video
-                                fontSize: config.fontSize,
-                                fontColor: config.fontColor,
-                                position: config.position === 'center' ? 'middle' : config.position
+                                style: textStyle,
+                                animation: true,  // Enable animations for videos
+                                maxDuration: 10,  // Maximum 10 seconds
+                                fps: 15           // 15 frames per second is good for stickers
                             }
                         );
                         
-                        await MessageUtils.sendMessage(sock, chatId, '✅ Video FFmpeg composite berhasil!');
-                    } catch {
-                        // Fallback to EmojiTextRenderer for video
-                        stickerBuffer = await EmojiTextRenderer.processVideoWithText(buffer, actualText, {
-                            fontSize: config.fontSize,
-                            fontColor: config.fontColor,
-                            position: config.position
-                        });
+                        await MessageUtils.sendMessage(sock, chatId, '✅ Enhanced HTML/CSS video processing berhasil!');
+                    } catch (videoError) {
+                        console.error('HTML video processing failed, trying fallback:', videoError);
                         
-                        await MessageUtils.sendMessage(sock, chatId, '✅ Video FFmpeg rendering berhasil!');
+                        // First fallback - try TextCompositeRenderer
+                        try {
+                            const styleMap = {
+                                meme: { fontSize: 40, fontColor: '#ffffff', position: 'top' as const },
+                                title: { fontSize: 48, fontColor: '#ffffff', position: 'top' as const },
+                                caption: { fontSize: 32, fontColor: '#ffffff', position: 'center' as const },
+                                watermark: { fontSize: 24, fontColor: 'rgba(255,255,255,0.7)', position: 'bottom' as const },
+                                comic: { fontSize: 36, fontColor: '#ffffff', position: 'center' as const },
+                                neon: { fontSize: 42, fontColor: '#00ff00', position: 'center' as const }
+                            };
+                            
+                            const config = styleMap[textStyle as keyof typeof styleMap] || styleMap['meme'];
+                            
+                            stickerBuffer = await TextCompositeRenderer.compositeHtmlTextOverImage(
+                                buffer, 
+                                actualText, 
+                                { 
+                                    style: textStyle, 
+                                    method: 'ffmpeg', // Force FFmpeg for video
+                                    fontSize: config.fontSize,
+                                    fontColor: config.fontColor,
+                                    position: config.position === 'center' ? 'middle' : config.position
+                                }
+                            );
+                            
+                            await MessageUtils.sendMessage(sock, chatId, '✅ Video FFmpeg composite fallback berhasil!');
+                        } catch (compositeError) {
+                            console.error('Composite fallback failed, using direct FFmpeg:', compositeError);
+                            
+                            // Last resort - EmojiTextRenderer
+                            const styleMap = {
+                                meme: { fontSize: 40, fontColor: '#ffffff', position: 'top' as const },
+                                title: { fontSize: 48, fontColor: '#ffffff', position: 'top' as const },
+                                caption: { fontSize: 32, fontColor: '#ffffff', position: 'center' as const },
+                                watermark: { fontSize: 24, fontColor: 'rgba(255,255,255,0.7)', position: 'bottom' as const },
+                                comic: { fontSize: 36, fontColor: '#ffffff', position: 'center' as const },
+                                neon: { fontSize: 42, fontColor: '#00ff00', position: 'center' as const }
+                            };
+                            
+                            const config = styleMap[textStyle as keyof typeof styleMap] || styleMap['meme'];
+                            
+                            stickerBuffer = await EmojiTextRenderer.processVideoWithText(buffer, actualText, {
+                                fontSize: config.fontSize,
+                                fontColor: config.fontColor,
+                                position: config.position
+                            });
+                            
+                            await MessageUtils.sendMessage(sock, chatId, '✅ FFmpeg direct rendering fallback berhasil!');
+                        }
                     }
                 }
             } catch (error) {
